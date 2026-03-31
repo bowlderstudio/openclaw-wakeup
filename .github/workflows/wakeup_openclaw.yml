@@ -22,4 +22,4 @@ jobs:
     steps:
       - name: Curl Fly App
         run: |
-          curl -I https://openclaw-min.fly.dev/ || true
+          curl -s -o /dev/null -w "%{http_code}\n" https://openclaw-min.fly.dev/
