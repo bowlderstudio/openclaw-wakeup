@@ -14,6 +14,8 @@ on:
     # 08:15 Oslo (UTC 06:15)
     - cron: "15 6 * * *"
 
+  workflow_dispatch: 
+
 jobs:
   wake:
     runs-on: ubuntu-latest
@@ -21,4 +23,3 @@ jobs:
       - name: Curl Fly App
         run: |
           curl -I https://openclaw-min.fly.dev/ || true
-
