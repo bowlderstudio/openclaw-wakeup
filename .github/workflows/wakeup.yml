@@ -1,0 +1,23 @@
+name: Wake Fly App
+
+on:
+  schedule:
+    # 07:55 Oslo (UTC 05:55)
+    - cron: "55 5 * * *"
+
+    # 07:58 Oslo (UTC 05:58)
+    - cron: "58 5 * * *"
+
+    # 08:00–08:14 Oslo every 2 minutes
+    - cron: "0,2,4,6,8,10,12,14 6 * * *"
+
+    # 08:15 Oslo (UTC 06:15)
+    - cron: "15 6 * * *"
+
+jobs:
+  wake:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Curl Fly App
+        run: |
+          curl -I https://openclaw-min.fly.dev/ || true
