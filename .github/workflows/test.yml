@@ -1,69 +1,32 @@
-name: Daily AI News
-on:
-  schedule:
-    - cron: '0 6 * * *'
-  workflow_dispatch:
+name: Test JSON Encoding
+on: workflow_dispatch
 
 jobs:
-  send:
+  test:
     runs-on: ubuntu-latest
     steps:
-    - name: Send AI news
+    - name: Test simple message
       env:
         TOKEN: ${{ secrets.OPENCLAW_API_TOKEN }}
       run: |
-        echo "开始AI新闻任务..."
-        
-        # Get AI news - handle non-JSON responses
-        RAW_RESPONSE=$(curl -s -X POST "https://openclaw-min.fly.dev/tools/invoke" \
-          -H "Authorization: Bearer $TOKEN" \
-          -H "Content-Type: application/json" \
-          -d '{
-            "tool": "web_search",
+        # Test with a simple message first
+        jq -n \
+          --arg tool "message" \
+          --arg action "send" \
+          --arg to "8604429591" \
+          --arg channel "telegram" \
+          --arg message "Test message from GitHub Actions $(date)" \
+          '{
+            "tool": $tool,
             "args": {
-              "query": "AI news today with source URLs",
-              "count": 3
+              "action": $action,
+              "to": $to,
+              "channel": $channel,
+              "message": $message
             }
-          }')
+          }' | curl -X POST "https://openclaw-min.fly.dev/tools/invoke" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d @-
         
-        echo "Raw response length: ${#RAW_RESPONSE}"
-        echo "First 200 chars: ${RAW_RESPONSE:0:200}"
-        
-        # Try to extract content, fallback if not JSON
-        if echo "$RAW_RESPONSE" | jq -e . >/dev/null 2>&1; then
-          echo "Response is valid JSON"
-          CONTENT=$(echo "$RAW_RESPONSE" | jq -r '.result.content[0].text // .content // .text // ""' 2>/dev/null)
-        else
-          echo "Response is NOT JSON, using fallback"
-          CONTENT=""
-        fi
-        
-        # Prepare message
-        if [ -n "$CONTENT" ] && [ "$CONTENT" != "null" ] && [ ${#CONTENT} -gt 10 ]; then
-          CLEAN=$(echo "$CONTENT" | sed 's/<<<[^>]*>>>//g' | head -800)
-          MESSAGE="📰 AI News\n\n$CLEAN"
-        else
-          MESSAGE="📰 AI News\n\nTop AI developments today:\n• AI in healthcare advancing\n• New climate modeling tools\n• Autonomous systems updates\n• Ethical AI frameworks\n• Quantum computing progress"
-        fi
-        
-        echo "Message prepared (length: ${#MESSAGE})"
-        
-        # Send to Telegram - with error handling
-        TELEGRAM_RESPONSE=$(curl -s -w "\nSTATUS: %{http_code}" \
-          -X POST "https://openclaw-min.fly.dev/tools/invoke" \
-          -H "Authorization: Bearer $TOKEN" \
-          -H "Content-Type: application/json" \
-          -d "{
-            \"tool\": \"message\",
-            \"args\": {
-              \"action\": \"send\",
-              \"to\": \"8604429591\",
-              \"message\": \"$MESSAGE\",
-              \"channel\": \"telegram\"
-            }
-          }")
-        
-        echo "Telegram response:"
-        echo "$TELEGRAM_RESPONSE"
-        
-        echo "任务完成"
+        echo "Test message sent"
