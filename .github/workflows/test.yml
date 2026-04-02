@@ -74,6 +74,7 @@ jobs:
           --arg action "send" \
           --arg to "8604429591" \
           --arg channel "telegram" \
+          --arg accountId "8628115777" \
           --arg message "$MESSAGE" \
           '{
             "tool": $tool,
