@@ -8,11 +8,39 @@ jobs:
   send:
     runs-on: ubuntu-latest
     steps:
-      - name: Get and send AI news
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+      
+      - name: Send AI news
         env:
           TOKEN: ${{ secrets.OPENCLAW_API_TOKEN }}
         run: |
-          # 发送简单的测试消息
+          echo "开始AI新闻任务..."
+          
+          # 获取AI新闻
+          response=$(curl -s -X POST "https://openclaw-min.fly.dev/tools/invoke" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "tool": "web_search",
+              "args": {
+                "query": "AI news today",
+                "count": 3
+              }
+            }')
+          
+          # 提取内容
+          content=$(echo "$response" | jq -r '.result.content[0].text' 2>/dev/null || echo "")
+          
+          if [ -n "$content" ]; then
+            actual=$(echo "$content" | jq -r '.content' 2>/dev/null || echo "$content")
+            clean=$(echo "$actual" | sed 's/<<<EXTERNAL_UNTRUSTED_CONTENT[^>]*>>>//g')
+            message="📰 AI News\n\n$clean"
+          else
+            message="📰 AI News\n\nContent unavailable"
+          fi
+          
+          # 发送
           curl -X POST "https://openclaw-min.fly.dev/tools/invoke" \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
@@ -21,9 +49,7 @@ jobs:
               "args": {
                 "action": "send",
                 "to": "8604429591",
-                "message": "🤖 AI新闻测试 - GitHub Actions工作",
+                "message": "'"$(echo "$message" | sed 's/"/\\"/g' | sed 's/$/\\n/' | tr -d '\n')"'",
                 "channel": "telegram"
               }
             }'
-          
-          echo "测试消息已发送"
