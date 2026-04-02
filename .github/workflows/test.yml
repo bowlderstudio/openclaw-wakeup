@@ -21,7 +21,7 @@ jobs:
           -d '{
             "tool": "tavily_search",
             "args": {
-              "query": "latest AI news 2026 artificial intelligence developments",
+              "query": "AI新闻 最新消息 人工智能 发展 英文 中文 latest AI news developments in English and Chinese with source URLs"
               "max_results": 5,
               "include_answer": true,
               "search_depth": "advanced",
