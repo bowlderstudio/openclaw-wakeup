@@ -2,23 +2,78 @@ name: Daily AI News
 on:
   schedule:
     - cron: '0 6 * * *'  # 每天6:00 UTC
-  workflow_dispatch:
+  workflow_dispatch:      # 手动触发
 
 jobs:
   send-ai-news:
     runs-on: ubuntu-latest
     steps:
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y jq curl
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
       
-      - name: Download and run AI news script
+      - name: Get and send AI news
         env:
           OPENCLAW_API_TOKEN: ${{ secrets.OPENCLAW_API_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          # 下载脚本
-          curl -s https://github.com/bowlderstudio/openclaw-wakeup/blob/master/ai_news_github_action.sh -o ai_news.sh
-          chmod +x ai_news.sh
+          # 设置变量
+          API_URL="https://openclaw-min.fly.dev/tools/invoke"
+          API_TOKEN="$OPENCLAW_API_TOKEN"
+          TELEGRAM_CHAT_ID="$TELEGRAM_CHAT_ID"
           
-          # 运行脚本
-          ./ai_news.sh
+          echo "🚀 开始获取AI新闻..."
+          
+          # 1. 获取AI新闻
+          echo "搜索AI新闻..."
+          NEWS_RESPONSE=$(curl -s -X POST "$API_URL" \
+            -H "Authorization: Bearer $API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "tool": "web_search",
+              "args": {
+                "query": "最新AI新闻 人工智能 发展 突破 研究",
+                "count": 5
+              }
+            }')
+          
+          # 检查是否成功
+          if echo "$NEWS_RESPONSE" | grep -q '"ok":false'; then
+            echo "❌ 获取新闻失败"
+            exit 1
+          fi
+          
+          echo "✅ 新闻获取成功"
+          
+          # 2. 提取新闻内容
+          echo "提取新闻内容..."
+          NEWS_CONTENT=$(echo "$NEWS_RESPONSE" | jq -r '.result.content[0].text' 2>/dev/null || echo "")
+          
+          if [ -n "$NEWS_CONTENT" ]; then
+            # 尝试从嵌套JSON中提取
+            ACTUAL_CONTENT=$(echo "$NEWS_CONTENT" | jq -r '.content' 2>/dev/null || echo "$NEWS_CONTENT")
+          else
+            ACTUAL_CONTENT="今日AI新闻摘要"
+          fi
+          
+          # 3. 清理内容
+          CLEANED_CONTENT=$(echo "$ACTUAL_CONTENT" | \
+            sed 's/<<<EXTERNAL_UNTRUSTED_CONTENT[^>]*>>>//g' | \
+            sed 's/<<<END_EXTERNAL_UNTRUSTED_CONTENT[^>]*>>>//g' | \
+            sed 's/Source: Web Search//g' | \
+            sed 's/---//g')
+          
+          # 4. 发送到Telegram
+          echo "发送到Telegram..."
+          curl -X POST "$API_URL" \
+            -H "Authorization: Bearer $API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "tool": "message",
+              "args": {
+                "action": "send",
+                "to": "'"$TELEGRAM_CHAT_ID"'",
+                "message": "📰 今日AI新闻摘要\n\n'"${CLEANED_CONTENT:0:3000}"'...\n\n来源：OpenClaw",
+                "channel": "telegram"
+              }
+            }'
+          
+          echo "✅ AI新闻已发送"
