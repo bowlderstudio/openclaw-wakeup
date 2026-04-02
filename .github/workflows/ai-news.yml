@@ -1,15 +1,29 @@
-name: AI News Test
-on: workflow_dispatch
+name: Daily AI News
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
 
 jobs:
-  test:
+  send:
     runs-on: ubuntu-latest
     steps:
-      - name: Send test message
+      - name: Get and send AI news
         env:
           TOKEN: ${{ secrets.OPENCLAW_API_TOKEN }}
         run: |
+          # 发送简单的测试消息
           curl -X POST "https://openclaw-min.fly.dev/tools/invoke" \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
-            -d '{"tool":"message","args":{"action":"send","to":"8604429591","message":"Send me top 5 AI news.","channel":"telegram"}}'
+            -d '{
+              "tool": "message",
+              "args": {
+                "action": "send",
+                "to": "8604429591",
+                "message": "🤖 AI新闻测试 - GitHub Actions工作",
+                "channel": "telegram"
+              }
+            }'
+          
+          echo "测试消息已发送"
