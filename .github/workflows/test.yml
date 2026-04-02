@@ -1,4 +1,4 @@
-name: Daily AI News with Tavily
+name: Daily AI News - Top 5
 on:
   schedule:
     - cron: '0 6 * * *'
@@ -8,23 +8,24 @@ jobs:
   send:
     runs-on: ubuntu-latest
     steps:
-    - name: Send AI news
+    - name: Send Top 5 AI news
       env:
         TOKEN: ${{ secrets.OPENCLAW_API_TOKEN }}
       run: |
-        echo "开始AI新闻任务..."
+        echo "开始AI新闻任务 - Top 5..."
         
-        # Get Tavily search results
+        # Get Tavily search results for 5 news items
         SEARCH_RESULT=$(curl -s -X POST "https://openclaw-min.fly.dev/tools/invoke" \
           -H "Authorization: Bearer $TOKEN" \
           -H "Content-Type: application/json" \
           -d '{
             "tool": "tavily_search",
             "args": {
-              "query": "latest AI news 2026",
-              "max_results": 3,
+              "query": "latest AI news 2026 artificial intelligence developments",
+              "max_results": 5,
               "include_answer": true,
-              "search_depth": "advanced"
+              "search_depth": "advanced",
+              "time_range": "day"
             }
           }')
         
@@ -33,45 +34,43 @@ jobs:
         # Extract the JSON string from .result.content[0].text
         TAVILY_JSON=$(echo "$SEARCH_RESULT" | jq -r '.result.content[0].text' 2>/dev/null || echo "{}")
         
-        echo "Tavily JSON length: ${#TAVILY_JSON}"
-        
         # Parse the Tavily JSON
         ANSWER=$(echo "$TAVILY_JSON" | jq -r '.answer // ""' 2>/dev/null || echo "")
-        echo "Answer length: ${#ANSWER}"
         
         # Clean the answer
         if [ -n "$ANSWER" ] && [ "$ANSWER" != "null" ]; then
-          CLEAN_ANSWER=$(echo "$ANSWER" | sed 's/<<<EXTERNAL_UNTRUSTED_CONTENT[^>]*>>>//g' | sed 's/END_EXTERNAL_UNTRUSTED_CONTENT//g' | sed 's/Source: Web Search---//g' | tr -d '\n' | sed 's/  */ /g' | cut -c 1-300)
-          echo "Cleaned answer: $CLEAN_ANSWER"
+          CLEAN_ANSWER=$(echo "$ANSWER" | sed 's/<<<EXTERNAL_UNTRUSTED_CONTENT[^>]*>>>//g' | sed 's/END_EXTERNAL_UNTRUSTED_CONTENT//g' | sed 's/Source: Web Search---//g' | tr -d '\n' | sed 's/  */ /g')
         else
-          CLEAN_ANSWER="AMD unveiled advanced AI PC chips at CES 2026. AI trends include intelligent systems with enhanced context windows."
-          echo "Using fallback answer"
+          CLEAN_ANSWER="Latest AI developments in 2026 focus on integrated systems, quantum computing, and AI sovereignty."
         fi
         
-        # Get first result
-        FIRST_TITLE=$(echo "$TAVILY_JSON" | jq -r '.results[0].title // ""' 2>/dev/null || echo "")
-        FIRST_URL=$(echo "$TAVILY_JSON" | jq -r '.results[0].url // ""' 2>/dev/null || echo "")
-        
-        echo "First title: $FIRST_TITLE"
-        echo "First URL: $FIRST_URL"
-        
-        if [ -n "$FIRST_TITLE" ] && [ "$FIRST_TITLE" != "null" ]; then
-          CLEAN_TITLE=$(echo "$FIRST_TITLE" | sed 's/<<<EXTERNAL_UNTRUSTED_CONTENT[^>]*>>>//g' | sed 's/END_EXTERNAL_UNTRUSTED_CONTENT//g' | sed 's/Source: Web Search---//g' | tr -d '\n' | sed 's/  */ /g')
-        else
-          CLEAN_TITLE="What's next for AI in 2026"
-          FIRST_URL="https://www.technologyreview.com/2026/01/05/1130662/whats-next-for-ai-in-2026/"
-        fi
-        
-        # Create message
-        MESSAGE="📰 **AI News Update**\\n\\n"
+        # Build the message with all 5 results
+        MESSAGE="📰 **Top 5 AI News** *(2026-04-02)*\\n\\n"
         MESSAGE+="**Summary:** $CLEAN_ANSWER\\n\\n"
-        MESSAGE+="**Top Story:** $CLEAN_TITLE\\n"
-        MESSAGE+="**Read more:** $FIRST_URL\\n\\n"
-        MESSAGE+="_Source: Tavily Search • $(date -u +'%Y-%m-%d %H:%M UTC')_"
+        MESSAGE+="**Top Stories:**\\n"
         
-        echo "Final message created"
+        # Loop through all 5 results
+        for i in {0..4}; do
+          TITLE=$(echo "$TAVILY_JSON" | jq -r ".results[$i].title // \"\"" 2>/dev/null || echo "")
+          URL=$(echo "$TAVILY_JSON" | jq -r ".results[$i].url // \"\"" 2>/dev/null || echo "")
+          SNIPPET=$(echo "$TAVILY_JSON" | jq -r ".results[$i].snippet // \"\"" 2>/dev/null || echo "")
+          
+          if [ -n "$TITLE" ] && [ "$TITLE" != "null" ] && [ -n "$URL" ]; then
+            # Clean the content
+            CLEAN_TITLE=$(echo "$TITLE" | sed 's/<<<EXTERNAL_UNTRUSTED_CONTENT[^>]*>>>//g' | sed 's/END_EXTERNAL_UNTRUSTED_CONTENT//g' | sed 's/Source: Web Search---//g' | tr -d '\n' | sed 's/  */ /g')
+            CLEAN_SNIPPET=$(echo "$SNIPPET" | sed 's/<<<EXTERNAL_UNTRUSTED_CONTENT[^>]*>>>//g' | sed 's/END_EXTERNAL_UNTRUSTED_CONTENT//g' | sed 's/Source: Web Search---//g' | tr -d '\n' | sed 's/  */ /g' | cut -c 1-150)
+            
+            MESSAGE+="$((i+1)). **$CLEAN_TITLE**\\n"
+            MESSAGE+="   $CLEAN_SNIPPET...\\n"
+            MESSAGE+="   🔗 $URL\\n\\n"
+          fi
+        done
         
-        # Send to Telegram - CORRECT DOMAIN
+        MESSAGE+="_Source: Tavily Search • Updated: $(date -u +'%H:%M UTC')_"
+        
+        echo "Message created (length: ${#MESSAGE})"
+        
+        # Send to Telegram
         TELEGRAM_JSON=$(jq -n \
           --arg tool "message" \
           --arg action "send" \
@@ -88,11 +87,11 @@ jobs:
             }
           }')
         
-        echo "Sending to Telegram (openclaw-min.fly.dev)..."
+        echo "Sending to Telegram..."
         
         curl -X POST "https://openclaw-min.fly.dev/tools/invoke" \
           -H "Authorization: Bearer $TOKEN" \
           -H "Content-Type: application/json" \
           -d "$TELEGRAM_JSON"
         
-        echo "任务完成"
+        echo "Top 5 AI news sent"
