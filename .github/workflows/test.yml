@@ -1,4 +1,4 @@
-name: Daily AI News Python
+name: Daily AI News
 on:
   schedule:
     - cron: '0 6 * * *'
@@ -8,73 +8,63 @@ jobs:
   send:
     runs-on: ubuntu-latest
     steps:
-    - name: Send AI news with Python
+    - name: Send AI news
       env:
         TOKEN: ${{ secrets.OPENCLAW_API_TOKEN }}
       run: |
-        python3 << 'EOF'
-import json
-import os
-import subprocess
-import sys
-
-token = os.environ.get('TOKEN')
-
-# 1. Get AI news
-search_data = {
-    "tool": "web_search",
-    "args": {
-        "query": "AI news today with source URLs",
-        "count": 3
-    }
-}
-
-search_cmd = [
-    'curl', '-s', '-X', 'POST',
-    'https://openclaw-min.fly.dev/tools/invoke',
-    '-H', f'Authorization: Bearer {token}',
-    '-H', 'Content-Type: application/json',
-    '-d', json.dumps(search_data)
-]
-
-result = subprocess.run(search_cmd, capture_output=True, text=True)
-response = json.loads(result.stdout) if result.stdout else {}
-
-# 2. Extract content
-content = ""
-try:
-    content = response.get('result', {}).get('content', [{}])[0].get('text', '')
-except:
-    content = ""
-
-# 3. Prepare message
-if content and content != "null":
-    # Clean content
-    clean = content.replace('<<<EXTERNAL_UNTRUSTED_CONTENT', '').replace('>>>', '')
-    message = f"📰 AI News\n\n{clean[:3000]}"
-else:
-    message = "📰 AI News\n\nLatest AI developments today."
-
-# 4. Send to Telegram
-telegram_data = {
-    "tool": "message",
-    "args": {
-        "action": "send",
-        "to": "8604429591",
-        "channel": "telegram",
-        "message": message
-    }
-}
-
-telegram_cmd = [
-    'curl', '-X', 'POST',
-    'https://openclaw-min.fly.dev/tools/invoke',
-    '-H', f'Authorization: Bearer {token}',
-    '-H', 'Content-Type: application/json',
-    '-d', json.dumps(telegram_data)
-]
-
-result = subprocess.run(telegram_cmd, capture_output=True, text=True)
-print("Telegram response:", result.stdout)
-print("任务完成")
-EOF
+        echo "开始AI新闻任务..."
+        
+        # Get AI news
+        RAW_RESPONSE=$(curl -s -X POST "https://openclaw-min.fly.dev/tools/invoke" \
+          -H "Authorization: Bearer $TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "tool": "web_search",
+            "args": {
+              "query": "AI news today with source URLs",
+              "count": 3
+            }
+          }')
+        
+        # Extract content using jq
+        CONTENT=$(echo "$RAW_RESPONSE" | jq -r '.result.content[0].text // ""')
+        
+        # Prepare message - clean up
+        if [ -n "$CONTENT" ] && [ "$CONTENT" != "null" ]; then
+          # Remove EXTERNAL_UNTRUSTED_CONTENT tags
+          CLEAN=$(echo "$CONTENT" | sed 's/<<<EXTERNAL_UNTRUSTED_CONTENT[^>]*>>>//g')
+          # Limit length for Telegram
+          TRUNCATED=$(echo "$CLEAN" | head -c 3000)
+          MESSAGE="📰 AI News\n\n$TRUNCATED"
+        else
+          MESSAGE="📰 AI News\n\nLatest AI developments today. Check tech news sites for detailed updates."
+        fi
+        
+        echo "Message length: ${#MESSAGE}"
+        
+        # Send to Telegram using jq to properly encode JSON
+        TELEGRAM_JSON=$(jq -n \
+          --arg tool "message" \
+          --arg action "send" \
+          --arg to "8604429591" \
+          --arg channel "telegram" \
+          --arg message "$MESSAGE" \
+          '{
+            "tool": $tool,
+            "args": {
+              "action": $action,
+              "to": $to,
+              "channel": $channel,
+              "message": $message
+            }
+          }')
+        
+        echo "Sending JSON:"
+        echo "$TELEGRAM_JSON" | jq .
+        
+        curl -X POST "https://openclaw-min.fly.dev/tools/invoke" \
+          -H "Authorization: Bearer $TOKEN" \
+          -H "Content-Type: application/json" \
+          -d "$TELEGRAM_JSON"
+        
+        echo "任务完成"
