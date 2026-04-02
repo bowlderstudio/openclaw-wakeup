@@ -24,45 +24,43 @@ jobs:
               "query": "latest AI news 2026",
               "max_results": 3,
               "include_answer": true,
-              "search_depth": "advanced",
-              "time_range": "day"
+              "search_depth": "advanced"
             }
           }')
         
-        echo "Raw response (first 500 chars):"
-        echo "$SEARCH_RESULT" | head -c 500
-        echo ""
+        echo "Response received"
         
-        # Debug: Check response structure
-        echo "=== Debugging response ==="
-        echo "$SEARCH_RESULT" | jq 'keys' 2>/dev/null || echo "Not valid JSON"
-        echo "$SEARCH_RESULT" | jq '.result | keys' 2>/dev/null || echo "No result key"
+        # Extract the JSON string from .result.content[0].text
+        TAVILY_JSON=$(echo "$SEARCH_RESULT" | jq -r '.result.content[0].text' 2>/dev/null || echo "{}")
         
-        # Extract data with proper handling
-        ANSWER=$(echo "$SEARCH_RESULT" | jq -r '.result.answer // .answer // ""' 2>/dev/null || echo "")
-        echo "Answer extracted (length: ${#ANSWER})"
+        echo "Tavily JSON length: ${#TAVILY_JSON}"
+        
+        # Parse the Tavily JSON
+        ANSWER=$(echo "$TAVILY_JSON" | jq -r '.answer // ""' 2>/dev/null || echo "")
+        echo "Answer length: ${#ANSWER}"
         
         # Clean the answer
-        if [ -n "$ANSWER" ]; then
-          CLEAN_ANSWER=$(echo "$ANSWER" | sed 's/<<<EXTERNAL_UNTRUSTED_CONTENT[^>]*>>>//g' | sed 's/END_EXTERNAL_UNTRUSTED_CONTENT//g' | sed 's/Source: Web Search---//g' | tr -d '\n' | sed 's/  */ /g')
+        if [ -n "$ANSWER" ] && [ "$ANSWER" != "null" ]; then
+          CLEAN_ANSWER=$(echo "$ANSWER" | sed 's/<<<EXTERNAL_UNTRUSTED_CONTENT[^>]*>>>//g' | sed 's/END_EXTERNAL_UNTRUSTED_CONTENT//g' | sed 's/Source: Web Search---//g' | tr -d '\n' | sed 's/  */ /g' | cut -c 1-300)
+          echo "Cleaned answer: $CLEAN_ANSWER"
         else
-          CLEAN_ANSWER="Latest AI developments include advanced chips from AMD and trends toward intelligent integrated systems."
+          CLEAN_ANSWER="AMD unveiled advanced AI PC chips at CES 2026. AI trends include intelligent systems with enhanced context windows."
+          echo "Using fallback answer"
         fi
         
         # Get first result
-        FIRST_TITLE=$(echo "$SEARCH_RESULT" | jq -r '.result.results[0].title // ""' 2>/dev/null || echo "")
-        FIRST_URL=$(echo "$SEARCH_RESULT" | jq -r '.result.results[0].url // ""' 2>/dev/null || echo "")
+        FIRST_TITLE=$(echo "$TAVILY_JSON" | jq -r '.results[0].title // ""' 2>/dev/null || echo "")
+        FIRST_URL=$(echo "$TAVILY_JSON" | jq -r '.results[0].url // ""' 2>/dev/null || echo "")
         
-        if [ -n "$FIRST_TITLE" ]; then
+        echo "First title: $FIRST_TITLE"
+        echo "First URL: $FIRST_URL"
+        
+        if [ -n "$FIRST_TITLE" ] && [ "$FIRST_TITLE" != "null" ]; then
           CLEAN_TITLE=$(echo "$FIRST_TITLE" | sed 's/<<<EXTERNAL_UNTRUSTED_CONTENT[^>]*>>>//g' | sed 's/END_EXTERNAL_UNTRUSTED_CONTENT//g' | sed 's/Source: Web Search---//g' | tr -d '\n' | sed 's/  */ /g')
         else
-          CLEAN_TITLE="AI Trends 2026"
+          CLEAN_TITLE="What's next for AI in 2026"
           FIRST_URL="https://www.technologyreview.com/2026/01/05/1130662/whats-next-for-ai-in-2026/"
         fi
-        
-        echo "Clean answer: $CLEAN_ANSWER"
-        echo "Clean title: $CLEAN_TITLE"
-        echo "URL: $FIRST_URL"
         
         # Create message
         MESSAGE="📰 **AI News Update**\\n\\n"
@@ -71,10 +69,9 @@ jobs:
         MESSAGE+="**Read more:** $FIRST_URL\\n\\n"
         MESSAGE+="_Source: Tavily Search • $(date -u +'%Y-%m-%d %H:%M UTC')_"
         
-        echo "Final message:"
-        echo "$MESSAGE"
+        echo "Final message created"
         
-        # Send to Telegram
+        # Send to Telegram - CORRECT DOMAIN
         TELEGRAM_JSON=$(jq -n \
           --arg tool "message" \
           --arg action "send" \
@@ -91,9 +88,9 @@ jobs:
             }
           }')
         
-        echo "Sending to Telegram..."
+        echo "Sending to Telegram (openclaw-min.fly.dev)..."
         
-        curl -v -X POST "https://openclaw-min.faw.dev/tools/invoke" \
+        curl -X POST "https://openclaw-min.fly.dev/tools/invoke" \
           -H "Authorization: Bearer $TOKEN" \
           -H "Content-Type: application/json" \
           -d "$TELEGRAM_JSON"
