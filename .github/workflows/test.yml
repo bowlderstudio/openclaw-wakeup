@@ -1,4 +1,4 @@
-name: Daily AI News
+name: Daily AI News with Tavily
 on:
   schedule:
     - cron: '0 6 * * *'
@@ -8,41 +8,77 @@ jobs:
   send:
     runs-on: ubuntu-latest
     steps:
-    - name: Send AI news
+    - name: Send AI news with Tavily
       env:
         TOKEN: ${{ secrets.OPENCLAW_API_TOKEN }}
       run: |
         echo "开始AI新闻任务..."
         
-        # Get AI news
-        RAW_RESPONSE=$(curl -s -X POST "https://openclaw-min.fly.dev/tools/invoke" \
-          -H "Authorization: Bearer $TOKEN" \
-          -H "Content-Type: application/json" \
-          -d '{
-            "tool": "web_search",
+        # Use Tavily search for real news
+        SEARCH_JSON=$(jq -n \
+          --arg tool "tavily_search" \
+          --arg query "latest AI news 2026 with source URLs from CNBC MIT TechCrunch" \
+          --arg search_depth "advanced" \
+          '{
+            "tool": $tool,
             "args": {
-              "query": "AI news today with source URLs",
-              "count": 3
+              "query": $query,
+              "max_results": 5,
+              "include_answer": true,
+              "search_depth": $search_depth,
+              "time_range": "day"
             }
           }')
         
-        # Extract content using jq
-        CONTENT=$(echo "$RAW_RESPONSE" | jq -r '.result.content[0].text // ""')
+        echo "Search JSON:"
+        echo "$SEARCH_JSON"
         
-        # Prepare message - clean up
-        if [ -n "$CONTENT" ] && [ "$CONTENT" != "null" ]; then
-          # Remove EXTERNAL_UNTRUSTED_CONTENT tags
-          CLEAN=$(echo "$CONTENT" | sed 's/<<<EXTERNAL_UNTRUSTED_CONTENT[^>]*>>>//g')
-          # Limit length for Telegram
-          TRUNCATED=$(echo "$CLEAN" | head -c 3000)
-          MESSAGE="📰 AI News\n\n$TRUNCATED"
-        else
-          MESSAGE="📰 AI News\n\nLatest AI developments today. Check tech news sites for detailed updates."
-        fi
+        # Get search results
+        SEARCH_RESPONSE=$(curl -s -X POST "https://openclaw-min.fly.dev/tools/invoke" \
+          -H "Authorization: Bearer $TOKEN" \
+          -H "Content-Type: application/json" \
+          -d "$SEARCH_JSON")
         
-        echo "Message length: ${#MESSAGE}"
+        echo "Search response received"
         
-        # Send to Telegram using jq to properly encode JSON
+        # Extract and format the news
+        FORMATTED_NEWS=$(echo "$SEARCH_RESPONSE" | python3 -c "
+import json
+import sys
+
+data = json.load(sys.stdin)
+results = data.get('result', {}).get('results', [])
+answer = data.get('result', {}).get('answer', '')
+
+# Clean answer text
+clean_answer = answer.replace('<<<EXTERNAL_UNTRUSTED_CONTENT', '').replace('>>>', '').replace('END_EXTERNAL_UNTRUSTED_CONTENT', '').strip()
+
+# Build message
+message = '📰 **AI News Digest** *(2026-04-02)*\\n\\n'
+message += '**Summary:** ' + clean_answer + '\\n\\n'
+message += '**Top Stories:**\\n'
+
+for i, result in enumerate(results[:5], 1):
+    title = result.get('title', '').replace('<<<EXTERNAL_UNTRUSTED_CONTENT', '').replace('>>>', '').replace('END_EXTERNAL_UNTRUSTED_CONTENT', '').strip()
+    url = result.get('url', '')
+    snippet = result.get('snippet', '').replace('<<<EXTERNAL_UNTRUSTED_CONTENT', '').replace('>>>', '').replace('END_EXTERNAL_UNTRUSTED_CONTENT', '').strip()[:200]
+    
+    if title and url:
+        message += f'{i}. **{title}**\\n'
+        message += f'   {snippet}...\\n'
+        message += f'   📎 {url}\\n\\n'
+
+print(json.dumps(message))
+")
+        
+        # Get the message
+        MESSAGE=$(echo "$FORMATTED_NEWS" | jq -r '.')
+        
+        echo "Formatted message length: ${#MESSAGE}"
+        echo "Message preview:"
+        echo "$MESSAGE" | head -5
+        
+        # Send to Telegram
         TELEGRAM_JSON=$(jq -n \
           --arg tool "message" \
           --arg action "send" \
@@ -59,8 +95,7 @@ jobs:
             }
           }')
         
-        echo "Sending JSON:"
-        echo "$TELEGRAM_JSON" | jq .
+        echo "Sending to Telegram..."
         
         curl -X POST "https://openclaw-min.fly.dev/tools/invoke" \
           -H "Authorization: Bearer $TOKEN" \
