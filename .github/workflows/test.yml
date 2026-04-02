@@ -89,8 +89,9 @@ jobs:
         echo "Sending to Telegram..."
         
         curl -X POST "https://openclaw-min.fly.dev/tools/invoke" \
-          -H "Authorization: Bearer $TOKEN" \
-          -H "Content-Type: application/json" \
-          -d "$TELEGRAM_JSON"
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -H "x-openclaw-account-id: 8628115777" \
+            -d "$TELEGRAM_JSON"
         
         echo "Top 5 AI news sent"
