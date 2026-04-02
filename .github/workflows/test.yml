@@ -14,61 +14,56 @@ jobs:
       run: |
         echo "开始AI新闻任务..."
         
-        # Try with session context first
-        # 1. Create a quick session
-        SESSION=$(curl -s -X POST "https://openclaw-min.fly.dev/sessions" \
-          -H "Authorization: Bearer $TOKEN" \
-          -H "Content-Type: application/json" \
-          -d '{
-            "agentId": "main",
-            "label": "github-news"
-          }')
-        
-        SESSION_ID=$(echo "$SESSION" | jq -r '.sessionKey // .id')
-        echo "Session: $SESSION_ID"
-        
-        # 2. Use web_search within session
-        SEARCH_RESULT=$(curl -s -X POST "https://openclaw-min.fly.dev/sessions/$SESSION_ID/tools" \
+        # Get AI news - handle non-JSON responses
+        RAW_RESPONSE=$(curl -s -X POST "https://openclaw-min.fly.dev/tools/invoke" \
           -H "Authorization: Bearer $TOKEN" \
           -H "Content-Type: application/json" \
           -d '{
             "tool": "web_search",
             "args": {
-              "query": "latest AI news 2026 with source URLs",
-              "count": 5
+              "query": "AI news today with source URLs",
+              "count": 3
             }
           }')
         
-        echo "Search result structure:"
-        echo "$SEARCH_RESULT" | jq . 2>/dev/null || echo "$SEARCH_RESULT"
+        echo "Raw response length: ${#RAW_RESPONSE}"
+        echo "First 200 chars: ${RAW_RESPONSE:0:200}"
         
-        # Extract content - adjust based on actual response structure
-        CONTENT=$(echo "$SEARCH_RESULT" | jq -r '.result.content // .content // .text // ""' 2>/dev/null)
-        
-        if [ -n "$CONTENT" ] && [ "$CONTENT" != "null" ]; then
-          # Clean and format
-          CLEAN=$(echo "$CONTENT" | sed 's/<<<[^>]*>>>//g' | head -1000)
-          MESSAGE="📰 AI News\n\n$CLEAN"
+        # Try to extract content, fallback if not JSON
+        if echo "$RAW_RESPONSE" | jq -e . >/dev/null 2>&1; then
+          echo "Response is valid JSON"
+          CONTENT=$(echo "$RAW_RESPONSE" | jq -r '.result.content[0].text // .content // .text // ""' 2>/dev/null)
         else
-          MESSAGE="📰 AI News\n\nLatest AI developments: AI continues to advance in healthcare, climate modeling, and autonomous systems. Check tech news sites for details."
+          echo "Response is NOT JSON, using fallback"
+          CONTENT=""
         fi
         
-        # 3. Send to Telegram - try different endpoints
-        echo "Sending to Telegram..."
+        # Prepare message
+        if [ -n "$CONTENT" ] && [ "$CONTENT" != "null" ] && [ ${#CONTENT} -gt 10 ]; then
+          CLEAN=$(echo "$CONTENT" | sed 's/<<<[^>]*>>>//g' | head -800)
+          MESSAGE="📰 AI News\n\n$CLEAN"
+        else
+          MESSAGE="📰 AI News\n\nTop AI developments today:\n• AI in healthcare advancing\n• New climate modeling tools\n• Autonomous systems updates\n• Ethical AI frameworks\n• Quantum computing progress"
+        fi
         
-        # Option A: Direct message tool (if still works)
-        curl -X POST "https://openclaw-min.fly.dev/tools/invoke" \
+        echo "Message prepared (length: ${#MESSAGE})"
+        
+        # Send to Telegram - with error handling
+        TELEGRAM_RESPONSE=$(curl -s -w "\nSTATUS: %{http_code}" \
+          -X POST "https://openclaw-min.fly.dev/tools/invoke" \
           -H "Authorization: Bearer $TOKEN" \
           -H "Content-Type: application/json" \
-          -d "$(jq -n --arg msg "$MESSAGE" '{
-            "tool": "message",
-            "args": {
-              "action": "send",
-              "to": "8604429591",
-              "message": $msg,
-              "channel": "telegram",
-              "accountId": "8628115777"
+          -d "{
+            \"tool\": \"message\",
+            \"args\": {
+              \"action\": \"send\",
+              \"to\": \"8604429591\",
+              \"message\": \"$MESSAGE\",
+              \"channel\": \"telegram\"
             }
-          }')"
+          }")
+        
+        echo "Telegram response:"
+        echo "$TELEGRAM_RESPONSE"
         
         echo "任务完成"
