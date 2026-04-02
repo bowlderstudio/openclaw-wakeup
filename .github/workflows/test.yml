@@ -1,11 +1,74 @@
-name: Test Workflow
-
+name: Daily AI News
 on:
+  schedule:
+    - cron: '0 6 * * *'
   workflow_dispatch:
 
 jobs:
-  test:
+  send:
     runs-on: ubuntu-latest
     steps:
-      - name: Print message
-        run: echo "GitHub Actions is working!"
+    - name: Send AI news
+      env:
+        TOKEN: ${{ secrets.OPENCLAW_API_TOKEN }}
+      run: |
+        echo "开始AI新闻任务..."
+        
+        # Try with session context first
+        # 1. Create a quick session
+        SESSION=$(curl -s -X POST "https://openclaw-min.fly.dev/sessions" \
+          -H "Authorization: Bearer $TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "agentId": "main",
+            "label": "github-news"
+          }')
+        
+        SESSION_ID=$(echo "$SESSION" | jq -r '.sessionKey // .id')
+        echo "Session: $SESSION_ID"
+        
+        # 2. Use web_search within session
+        SEARCH_RESULT=$(curl -s -X POST "https://openclaw-min.fly.dev/sessions/$SESSION_ID/tools" \
+          -H "Authorization: Bearer $TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "tool": "web_search",
+            "args": {
+              "query": "latest AI news 2026 with source URLs",
+              "count": 5
+            }
+          }')
+        
+        echo "Search result structure:"
+        echo "$SEARCH_RESULT" | jq . 2>/dev/null || echo "$SEARCH_RESULT"
+        
+        # Extract content - adjust based on actual response structure
+        CONTENT=$(echo "$SEARCH_RESULT" | jq -r '.result.content // .content // .text // ""' 2>/dev/null)
+        
+        if [ -n "$CONTENT" ] && [ "$CONTENT" != "null" ]; then
+          # Clean and format
+          CLEAN=$(echo "$CONTENT" | sed 's/<<<[^>]*>>>//g' | head -1000)
+          MESSAGE="📰 AI News\n\n$CLEAN"
+        else
+          MESSAGE="📰 AI News\n\nLatest AI developments: AI continues to advance in healthcare, climate modeling, and autonomous systems. Check tech news sites for details."
+        fi
+        
+        # 3. Send to Telegram - try different endpoints
+        echo "Sending to Telegram..."
+        
+        # Option A: Direct message tool (if still works)
+        curl -X POST "https://openclaw-min.fly.dev/tools/invoke" \
+          -H "Authorization: Bearer $TOKEN" \
+          -H "Content-Type: application/json" \
+          -d "$(jq -n --arg msg "$MESSAGE" '{
+            "tool": "message",
+            "args": {
+              "action": "send",
+              "to": "8604429591",
+              "message": $msg,
+              "channel": "telegram",
+              "accountId": "8628115777"
+            }
+          }')"
+        
+        echo "任务完成"
