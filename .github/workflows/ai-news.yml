@@ -24,7 +24,7 @@ jobs:
             -d '{
               "tool": "web_search",
               "args": {
-                "query": "AI news today",
+                "query": "AI news today with source url in both English anc Chinese",
                 "count": 3
               }
             }')
