@@ -1,32 +1,80 @@
-name: Test JSON Encoding
-on: workflow_dispatch
+name: Daily AI News Python
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
 
 jobs:
-  test:
+  send:
     runs-on: ubuntu-latest
     steps:
-    - name: Test simple message
+    - name: Send AI news with Python
       env:
         TOKEN: ${{ secrets.OPENCLAW_API_TOKEN }}
       run: |
-        # Test with a simple message first
-        jq -n \
-          --arg tool "message" \
-          --arg action "send" \
-          --arg to "8604429591" \
-          --arg channel "telegram" \
-          --arg message "Test message from GitHub Actions $(date)" \
-          '{
-            "tool": $tool,
-            "args": {
-              "action": $action,
-              "to": $to,
-              "channel": $channel,
-              "message": $message
-            }
-          }' | curl -X POST "https://openclaw-min.fly.dev/tools/invoke" \
-            -H "Authorization: Bearer $TOKEN" \
-            -H "Content-Type: application/json" \
-            -d @-
-        
-        echo "Test message sent"
+        python3 << 'EOF'
+import json
+import os
+import subprocess
+import sys
+
+token = os.environ.get('TOKEN')
+
+# 1. Get AI news
+search_data = {
+    "tool": "web_search",
+    "args": {
+        "query": "AI news today with source URLs",
+        "count": 3
+    }
+}
+
+search_cmd = [
+    'curl', '-s', '-X', 'POST',
+    'https://openclaw-min.fly.dev/tools/invoke',
+    '-H', f'Authorization: Bearer {token}',
+    '-H', 'Content-Type: application/json',
+    '-d', json.dumps(search_data)
+]
+
+result = subprocess.run(search_cmd, capture_output=True, text=True)
+response = json.loads(result.stdout) if result.stdout else {}
+
+# 2. Extract content
+content = ""
+try:
+    content = response.get('result', {}).get('content', [{}])[0].get('text', '')
+except:
+    content = ""
+
+# 3. Prepare message
+if content and content != "null":
+    # Clean content
+    clean = content.replace('<<<EXTERNAL_UNTRUSTED_CONTENT', '').replace('>>>', '')
+    message = f"📰 AI News\n\n{clean[:3000]}"
+else:
+    message = "📰 AI News\n\nLatest AI developments today."
+
+# 4. Send to Telegram
+telegram_data = {
+    "tool": "message",
+    "args": {
+        "action": "send",
+        "to": "8604429591",
+        "channel": "telegram",
+        "message": message
+    }
+}
+
+telegram_cmd = [
+    'curl', '-X', 'POST',
+    'https://openclaw-min.fly.dev/tools/invoke',
+    '-H', f'Authorization: Bearer {token}',
+    '-H', 'Content-Type: application/json',
+    '-d', json.dumps(telegram_data)
+]
+
+result = subprocess.run(telegram_cmd, capture_output=True, text=True)
+print("Telegram response:", result.stdout)
+print("任务完成")
+EOF
