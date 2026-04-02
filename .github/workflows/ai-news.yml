@@ -93,6 +93,7 @@ jobs:
             --arg action "send" \
             --arg to "8604429591" \
             --arg channel "telegram" \
+            --arg accountId "8628115777" \
             --arg message "$MESSAGE" \
             '{
               "tool": $tool,
@@ -109,6 +110,7 @@ jobs:
           curl -X POST "https://openclaw-min.fly.dev/tools/invoke" \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
+            -H "x-openclaw-account-id: 8628115777" \
             -d "$TELEGRAM_JSON"
           
           echo "Top 5 AI news sent"
