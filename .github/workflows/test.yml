@@ -1,4 +1,4 @@
-name: Daily AI News with Tavily
+name: Daily AI News Simple Tavily
 on:
   schedule:
     - cron: '0 6 * * *'
@@ -8,78 +8,38 @@ jobs:
   send:
     runs-on: ubuntu-latest
     steps:
-    - name: Send AI news with Tavily
+    - name: Send AI news
       env:
         TOKEN: ${{ secrets.OPENCLAW_API_TOKEN }}
       run: |
-        echo "开始AI新闻任务..."
-        
-        # Use Tavily search for real news
-        SEARCH_JSON=$(jq -n \
-          --arg tool "tavily_search" \
-          --arg query "latest AI news 2026 with source URLs from CNBC MIT TechCrunch" \
-          --arg search_depth "advanced" \
-          '{
-            "tool": $tool,
+        # Simple Tavily search and send
+        SEARCH_RESULT=$(curl -s -X POST "https://openclaw-min.fly.dev/tools/invoke" \
+          -H "Authorization: Bearer $TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "tool": "tavily_search",
             "args": {
-              "query": $query,
-              "max_results": 5,
+              "query": "latest AI news 2026",
+              "max_results": 3,
               "include_answer": true,
-              "search_depth": $search_depth,
-              "time_range": "day"
+              "search_depth": "advanced"
             }
           }')
         
-        echo "Search JSON:"
-        echo "$SEARCH_JSON"
+        # Extract answer and first result
+        ANSWER=$(echo "$SEARCH_RESULT" | jq -r '.result.answer // ""' | sed 's/<<<[^>]*>>>//g')
+        FIRST_TITLE=$(echo "$SEARCH_RESULT" | jq -r '.result.results[0].title // ""' | sed 's/<<<[^>]*>>>//g')
+        FIRST_URL=$(echo "$SEARCH_RESULT" | jq -r '.result.results[0].url // ""')
         
-        # Get search results
-        SEARCH_RESPONSE=$(curl -s -X POST "https://openclaw-min.fly.dev/tools/invoke" \
-          -H "Authorization: Bearer $TOKEN" \
-          -H "Content-Type: application/json" \
-          -d "$SEARCH_JSON")
-        
-        echo "Search response received"
-        
-        # Extract and format the news
-        FORMATTED_NEWS=$(echo "$SEARCH_RESPONSE" | python3 -c "
-import json
-import sys
-
-data = json.load(sys.stdin)
-results = data.get('result', {}).get('results', [])
-answer = data.get('result', {}).get('answer', '')
-
-# Clean answer text
-clean_answer = answer.replace('<<<EXTERNAL_UNTRUSTED_CONTENT', '').replace('>>>', '').replace('END_EXTERNAL_UNTRUSTED_CONTENT', '').strip()
-
-# Build message
-message = '📰 **AI News Digest** *(2026-04-02)*\\n\\n'
-message += '**Summary:** ' + clean_answer + '\\n\\n'
-message += '**Top Stories:**\\n'
-
-for i, result in enumerate(results[:5], 1):
-    title = result.get('title', '').replace('<<<EXTERNAL_UNTRUSTED_CONTENT', '').replace('>>>', '').replace('END_EXTERNAL_UNTRUSTED_CONTENT', '').strip()
-    url = result.get('url', '')
-    snippet = result.get('snippet', '').replace('<<<EXTERNAL_UNTRUSTED_CONTENT', '').replace('>>>', '').replace('END_EXTERNAL_UNTRUSTED_CONTENT', '').strip()[:200]
-    
-    if title and url:
-        message += f'{i}. **{title}**\\n'
-        message += f'   {snippet}...\\n'
-        message += f'   📎 {url}\\n\\n'
-
-print(json.dumps(message))
-")
-        
-        # Get the message
-        MESSAGE=$(echo "$FORMATTED_NEWS" | jq -r '.')
-        
-        echo "Formatted message length: ${#MESSAGE}"
-        echo "Message preview:"
-        echo "$MESSAGE" | head -5
+        # Create message
+        MESSAGE="📰 AI News Update\\n\\n"
+        MESSAGE+="Summary: $ANSWER\\n\\n"
+        MESSAGE+="Top story: $FIRST_TITLE\\n"
+        MESSAGE+="Read more: $FIRST_URL\\n\\n"
+        MESSAGE+="Source: Tavily Search"
         
         # Send to Telegram
-        TELEGRAM_JSON=$(jq -n \
+        jq -n \
           --arg tool "message" \
           --arg action "send" \
           --arg to "8604429591" \
@@ -93,13 +53,9 @@ print(json.dumps(message))
               "channel": $channel,
               "message": $message
             }
-          }')
+          }' | curl -X POST "https://openclaw-min.fly.dev/tools/invoke" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d @-
         
-        echo "Sending to Telegram..."
-        
-        curl -X POST "https://openclaw-min.fly.dev/tools/invoke" \
-          -H "Authorization: Bearer $TOKEN" \
-          -H "Content-Type: application/json" \
-          -d "$TELEGRAM_JSON"
-        
-        echo "任务完成"
+        echo "AI news sent with Tavily"
