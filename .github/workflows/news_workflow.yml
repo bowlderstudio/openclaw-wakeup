@@ -1,0 +1,24 @@
+name: Daily AI News
+on:
+  schedule:
+    - cron: '0 6 * * *'  # 每天6:00 UTC
+  workflow_dispatch:
+
+jobs:
+  send-ai-news:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y jq curl
+      
+      - name: Download and run AI news script
+        env:
+          OPENCLAW_API_TOKEN: ${{ secrets.OPENCLAW_API_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          # 下载脚本
+          curl -s https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/ai_news_github_action.sh -o ai_news.sh
+          chmod +x ai_news.sh
+          
+          # 运行脚本
+          ./ai_news.sh
