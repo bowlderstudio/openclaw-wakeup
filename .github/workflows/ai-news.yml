@@ -1,18 +1,42 @@
-name: Test OpenClaw API
-on: workflow_dispatch
+name: Daily AI News
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
 
 jobs:
-  test:
+  send:
     runs-on: ubuntu-latest
     steps:
-      - name: Send test message
+      - name: Get and send AI news
         env:
           TOKEN: ${{ secrets.OPENCLAW_API_TOKEN }}
         run: |
-          # 发送测试消息
+          # 1. 获取AI新闻
+          NEWS=$(curl -s -X POST "https://openclaw-min.fly.dev/tools/invoke" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "tool": "web_search",
+              "args": {
+                "query": "最新AI新闻 人工智能",
+                "count": 5
+              }
+            }')
+          
+          # 2. 提取和格式化（简化）
+          CONTENT=$(echo "$NEWS" | grep -o '"content":"[^"]*"' | head -1 | sed 's/"content":"//' | sed 's/"$//' | sed 's/\\n/\n/g')
+          
+          # 3. 发送到你的Telegram
           curl -X POST "https://openclaw-min.fly.dev/tools/invoke" \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
-            -d '{"tool":"message","args":{"action":"send","to":"8604429591","message":"TEST from GitHub","channel":"telegram"}}'
-          
-          echo "命令执行完成"
+            -d '{
+              "tool": "message",
+              "args": {
+                "action": "send",
+                "to": "8604429591",
+                "message": "📰 AI新闻\n\n'"${CONTENT:0:3000}"'",
+                "channel": "telegram"
+              }
+            }'
