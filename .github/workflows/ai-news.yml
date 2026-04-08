@@ -43,7 +43,8 @@ jobs:
                 "include_answer": "advanced",
                 "topic": "news",
                 "search_depth": "advanced",
-                "time_range": "day"
+                "time_range": "day",
+                "language": "zh"
               }
             }')
           
