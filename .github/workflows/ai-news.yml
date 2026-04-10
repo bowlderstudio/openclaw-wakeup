@@ -14,7 +14,7 @@ jobs:
 
       - name: Warm up OpenClaw
         run: |
-          for i in 1 2 3
+          for i in 1 # 2 3
           do
             echo "Wake attempt $i..."
             curl -s -o /dev/null -w "%{http_code}\n" https://openclaw-min.fly.dev/
