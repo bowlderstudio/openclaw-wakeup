@@ -43,12 +43,22 @@ jobs:
                 "include_answer": "advanced",
                 "topic": "news",
                 "search_depth": "advanced",
-                "time_range": "day",
-                "language": "zh"
+                "time_range": "day"
               }
             }')
           
           echo "Response received"
+
+          SEARCH_RESULT=$(curl -s -X POST "https://api.deepseek.com/chat/completions" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
+            -d "{
+              \"model\": \"deepseek-chat\",
+              \"messages\": [{
+                \"role\": \"user\",
+                \"content\": \"请将以下新闻内容翻译成中文，直接返回翻译结果，不要任何额外说明：\n\n$SEARCH_RESULT\"
+              }]
+            }" | jq -r '.choices[0].message.content')
           
           # Extract the JSON string from .result.content[0].text
           TAVILY_JSON=$(echo "$SEARCH_RESULT" | jq -r '.result.content[0].text' 2>/dev/null || echo "{}")
@@ -64,7 +74,7 @@ jobs:
           fi
           
           # Build the message with all 5 results
-          MESSAGE="📰 **Top 5 AI News** *(2026-04-02)*\\n\\n"
+          MESSAGE="📰 **Top 5 AI News** *($(date +%Y-%m-%d))*\\n\\n"
           MESSAGE+="**Summary:** $CLEAN_ANSWER\\n\\n"
           MESSAGE+="**Top Stories:**\\n"
           
