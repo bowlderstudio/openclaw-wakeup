@@ -20,8 +20,8 @@ jobs:
             curl -s -o /dev/null -w "%{http_code}\n" https://openclaw-min.fly.dev/
             
             if [ $i -lt 3 ]; then
-              echo "Sleeping 2 minutes..."
-              sleep 1
+              echo "Sleeping 1.5 minutes..."
+              sleep 90
             fi
           done
         
