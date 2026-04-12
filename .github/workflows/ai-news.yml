@@ -49,6 +49,7 @@ jobs:
             }')
           
           echo "Response received"
+          echo "RAW_RESULT: $RAW_RESULT"
 
           # .result.content[0].text is a JSON string, so parse it twice
           # Parse the raw result safely
