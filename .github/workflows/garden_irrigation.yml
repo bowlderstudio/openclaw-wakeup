@@ -1,43 +1,63 @@
 name: Garden Irrigation
 on:
   schedule:
-    - cron: '0 6 * * *'
-  workflow_dispatch:
+    - cron: '0 6 * * *'  # 06:00 UTC daily
+  workflow_dispatch:      # Manual trigger
 
 jobs:
   irrigate:
     runs-on: ubuntu-latest
-
+    
     steps:
-      - name: Warm up OpenClaw
-        run: |
-          for i in 1 2 3
-          do
-            echo "Wake attempt $i..."
-            curl -s -o /dev/null -w "%{http_code}\n" https://openclaw-min.fly.dev/
-            
-            if [ $i -lt 3 ]; then
-              echo "Sleeping 1.5 minutes..."
-              sleep 1
-            fi
-          done
-
-      - name: Call garden-irrigation skill
-        env:
-          TOKEN: ${{ secrets.OPENCLAW_API_TOKEN }}
-        run: |
-          echo "Starting garden irrigation..."
-
-          RESULT=$(curl -s -X POST "https://openclaw-min.fly.dev/tools/invoke" \
-            -H "Authorization: Bearer $TOKEN" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "tool": "agent",
-              "args": {
-                "agent": "garden_manager",
-                "skill": "garden-irrigation"
-              }
-            }')
-
-          echo "Response: $RESULT"
-          echo "Garden irrigation done"
+    - name: Warm up OpenClaw
+      run: |
+        echo "Waking up OpenClaw instance..."
+        for i in 1 2 3
+        do
+          echo "Wake attempt $i..."
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://openclaw-min.fly.dev/health || echo "000")
+          echo "Status: $STATUS"
+          
+          if [ "$STATUS" = "200" ]; then
+            echo "OpenClaw is awake!"
+            break
+          fi
+          
+          if [ $i -lt 3 ]; then
+            echo "Sleeping 30 seconds..."
+            sleep 30
+          fi
+        done
+        
+        if [ "$STATUS" != "200" ]; then
+          echo "Warning: OpenClaw may not be fully awake"
+        fi
+    
+    - name: Call garden-irrigation skill
+      env:
+        TOKEN: ${{ secrets.OPENCLAW_API_TOKEN }}
+        SESSION_KEY: "agent:gardenmanager:main"  # Your session key
+      run: |
+        echo "Starting garden irrigation..."
+        
+        # Method 1: Send message to the agent session
+        RESULT=$(curl -s -X POST "https://openclaw-min.fly.dev/api/v1/sessions/send" \
+          -H "Authorization: Bearer $TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "sessionKey": "'"$SESSION_KEY"'",
+            "message": "run garden irrigation skill"
+          }')
+        
+        echo "Response: $RESULT"
+        
+        # Check if successful
+        if echo "$RESULT" | grep -q '"status":"success"'; then
+          echo "✅ Garden irrigation started successfully"
+        else
+          echo "⚠️  Response indicates possible issue"
+          echo "Full response:"
+          echo "$RESULT" | jq '.' 2>/dev/null || echo "$RESULT"
+        fi
+        
+        echo "Garden irrigation request sent"
