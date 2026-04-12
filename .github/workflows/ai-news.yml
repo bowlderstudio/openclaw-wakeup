@@ -49,9 +49,7 @@ jobs:
             }')
           
           echo "Response received"
-          echo "RAW_RESULT: $RAW_RESULT"
 
-          # .result.content[0].text is a JSON string, so parse it twice
           # Parse the raw result safely
           RAW_TEXT=$(echo "$RAW_RESULT" | jq -r '.result.content[0].text' 2>/dev/null || echo "")
           
@@ -78,13 +76,9 @@ jobs:
           CLEAN_ANSWER=$(curl -s -X POST "https://api.deepseek.com/chat/completions" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
-            -d "{
-              \"model\": \"deepseek-chat\",
-              \"messages\": [{
-                \"role\": \"user\",
-                \"content\": \"请将以下内容翻译成中文，直接返回翻译结果，不要任何额外说明：\n\n$CLEAN_ANSWER\"
-              }]
-            }" | jq -r '.choices[0].message.content')
+            --data-binary "$(jq -n --arg content "请将以下内容翻译成中文，直接返回翻译结果，不要任何额外说明：\n\n$CLEAN_ANSWER" \
+              '{model:"deepseek-chat",messages:[{role:"user",content:$content}]}')" \
+            | jq -r '.choices[0].message.content // ""')
           
           # Build the message with all 5 results
           MESSAGE="📰 **Top 5 AI News** *($(date +%Y-%m-%d))*\\n\\n"
@@ -98,33 +92,24 @@ jobs:
             SNIPPET=$(echo "$TAVILY_JSON" | jq -r ".results[$i].snippet // \"\"" 2>/dev/null || echo "")
             
             if [ -n "$TITLE" ] && [ "$TITLE" != "null" ] && [ -n "$URL" ]; then
-              # Clean the content
               CLEAN_TITLE=$(echo "$TITLE" | sed 's/<<<EXTERNAL_UNTRUSTED_CONTENT[^>]*>>>//g' | sed 's/END_EXTERNAL_UNTRUSTED_CONTENT//g' | sed 's/Source: Web Search---//g' | tr -d '\n' | sed 's/  */ /g')
               CLEAN_SNIPPET=$(echo "$SNIPPET" | sed 's/<<<EXTERNAL_UNTRUSTED_CONTENT[^>]*>>>//g' | sed 's/END_EXTERNAL_UNTRUSTED_CONTENT//g' | sed 's/Source: Web Search---//g' | tr -d '\n' | sed 's/  */ /g' | cut -c 1-150)
               
-              # Translate title
+              # Translate title safely using jq to build JSON
               CLEAN_TITLE=$(curl -s -X POST "https://api.deepseek.com/chat/completions" \
                 -H "Content-Type: application/json" \
                 -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
-                -d "{
-                  \"model\": \"deepseek-chat\",
-                  \"messages\": [{
-                    \"role\": \"user\",
-                    \"content\": \"请将以下内容翻译成中文，直接返回翻译结果，不要任何额外说明：\n\n$CLEAN_TITLE\"
-                  }]
-                }" | jq -r '.choices[0].message.content')
+                --data-binary "$(jq -n --arg content "请将以下内容翻译成中文，直接返回翻译结果，不要任何额外说明：\n\n$CLEAN_TITLE" \
+                  '{model:"deepseek-chat",messages:[{role:"user",content:$content}]}')" \
+                | jq -r '.choices[0].message.content // ""')
 
-              # Translate snippet
+              # Translate snippet safely using jq to build JSON
               CLEAN_SNIPPET=$(curl -s -X POST "https://api.deepseek.com/chat/completions" \
                 -H "Content-Type: application/json" \
                 -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
-                -d "{
-                  \"model\": \"deepseek-chat\",
-                  \"messages\": [{
-                    \"role\": \"user\",
-                    \"content\": \"请将以下内容翻译成中文，直接返回翻译结果，不要任何额外说明：\n\n$CLEAN_SNIPPET\"
-                  }]
-                }" | jq -r '.choices[0].message.content')
+                --data-binary "$(jq -n --arg content "请将以下内容翻译成中文，直接返回翻译结果，不要任何额外说明：\n\n$CLEAN_SNIPPET" \
+                  '{model:"deepseek-chat",messages:[{role:"user",content:$content}]}')" \
+                | jq -r '.choices[0].message.content // ""')
               
               MESSAGE+="$((i+1)). **$CLEAN_TITLE**\\n"
               MESSAGE+="   $CLEAN_SNIPPET...\\n"
