@@ -51,7 +51,17 @@ jobs:
           echo "Response received"
 
           # .result.content[0].text is a JSON string, so parse it twice
-          TAVILY_JSON=$(echo "$RAW_RESULT" | jq -r '.result.content[0].text' 2>/dev/null | jq '.' 2>/dev/null || echo "{}")
+          # Parse the raw result safely
+          RAW_TEXT=$(echo "$RAW_RESULT" | jq -r '.result.content[0].text' 2>/dev/null || echo "")
+          
+          # Only try to parse as JSON if we got something back
+          if [ -n "$RAW_TEXT" ] && echo "$RAW_TEXT" | jq '.' > /dev/null 2>&1; then
+            TAVILY_JSON=$(echo "$RAW_TEXT" | jq '.')
+          else
+            echo "Warning: Could not parse Tavily response, raw result was:"
+            echo "$RAW_RESULT"
+            TAVILY_JSON="{}"
+          fi
           
           # Parse the Tavily JSON
           ANSWER=$(echo "$TAVILY_JSON" | jq -r '.answer // ""' 2>/dev/null || echo "")
