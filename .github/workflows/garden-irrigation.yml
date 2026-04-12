@@ -1,0 +1,16 @@
+name: Garden Irrigation
+on:
+  workflow_dispatch:
+
+jobs:
+  irrigate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Telegram command via bot
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.GARDEN_TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: '8604429591'
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${TELEGRAM_CHAT_ID}" \
+            -d "text=run garden irrigation skill"
