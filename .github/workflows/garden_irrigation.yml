@@ -9,9 +9,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
-
       - name: Warm up OpenClaw
         run: |
           for i in 1 2 3
@@ -42,40 +39,5 @@ jobs:
               }
             }')
 
-          echo "Response received"
-          echo "$RESULT"
-
-          # Extract response text
-          RESPONSE_TEXT=$(echo "$RESULT" | jq -r '.result.content[0].text // .result // "No response text"' 2>/dev/null || echo "Skill invoked (no text response)")
-
-          # Build Telegram message
-          MESSAGE="🌱 **Garden Irrigation** *($(date +%Y-%m-%d))*\n\n"
-          MESSAGE+="**Result:**\n$RESPONSE_TEXT\n\n"
-          MESSAGE+="_Triggered: $(date -u +'%H:%M UTC')_"
-
-          echo "Sending result to Telegram..."
-
-          TELEGRAM_JSON=$(jq -n \
-            --arg tool "message" \
-            --arg action "send" \
-            --arg to "8604429591" \
-            --arg channel "telegram" \
-            --arg accountId "8628115777" \
-            --arg message "$MESSAGE" \
-            '{
-              "tool": $tool,
-              "args": {
-                "action": $action,
-                "to": $to,
-                "channel": $channel,
-                "message": $message
-              }
-            }')
-
-          curl -X POST "https://openclaw-min.fly.dev/tools/invoke" \
-            -H "Authorization: Bearer $TOKEN" \
-            -H "Content-Type: application/json" \
-            -H "x-openclaw-account-id: 8628115777" \
-            -d "$TELEGRAM_JSON"
-
+          echo "Response: $RESULT"
           echo "Garden irrigation done"
