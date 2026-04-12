@@ -8,6 +8,19 @@ jobs:
   irrigate:
     runs-on: ubuntu-latest
     steps:
+      - name: Warm up OpenClaw
+        run: |
+          for i in 1 2 3
+          do
+            echo "Wake attempt $i..."
+            curl -s -o /dev/null -w "%{http_code}\n" https://openclaw-min.fly.dev/
+            
+            if [ $i -lt 3 ]; then
+              echo "Sleeping 1.5 minutes..."
+              sleep 1
+            fi
+          done
+          
       - name: Run garden irrigation skill
         run: |
           curl -X POST https://openclaw-min.fly.dev/hooks/agent \
