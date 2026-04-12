@@ -1,0 +1,81 @@
+name: Garden Irrigation
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  irrigate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Warm up OpenClaw
+        run: |
+          for i in 1 2 3
+          do
+            echo "Wake attempt $i..."
+            curl -s -o /dev/null -w "%{http_code}\n" https://openclaw-min.fly.dev/
+            
+            if [ $i -lt 3 ]; then
+              echo "Sleeping 1.5 minutes..."
+              sleep 90
+            fi
+          done
+
+      - name: Call garden-irrigation skill
+        env:
+          TOKEN: ${{ secrets.OPENCLAW_API_TOKEN }}
+        run: |
+          echo "Starting garden irrigation..."
+
+          RESULT=$(curl -s -X POST "https://openclaw-min.fly.dev/tools/invoke" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "tool": "agent",
+              "args": {
+                "agent": "garden_manager",
+                "skill": "garden-irrigation"
+              }
+            }')
+
+          echo "Response received"
+          echo "$RESULT"
+
+          # Extract response text
+          RESPONSE_TEXT=$(echo "$RESULT" | jq -r '.result.content[0].text // .result // "No response text"' 2>/dev/null || echo "Skill invoked (no text response)")
+
+          # Build Telegram message
+          MESSAGE="🌱 **Garden Irrigation** *($(date +%Y-%m-%d))*\n\n"
+          MESSAGE+="**Result:**\n$RESPONSE_TEXT\n\n"
+          MESSAGE+="_Triggered: $(date -u +'%H:%M UTC')_"
+
+          echo "Sending result to Telegram..."
+
+          TELEGRAM_JSON=$(jq -n \
+            --arg tool "message" \
+            --arg action "send" \
+            --arg to "8604429591" \
+            --arg channel "telegram" \
+            --arg accountId "8628115777" \
+            --arg message "$MESSAGE" \
+            '{
+              "tool": $tool,
+              "args": {
+                "action": $action,
+                "to": $to,
+                "channel": $channel,
+                "message": $message
+              }
+            }')
+
+          curl -X POST "https://openclaw-min.fly.dev/tools/invoke" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -H "x-openclaw-account-id: 8628115777" \
+            -d "$TELEGRAM_JSON"
+
+          echo "Garden irrigation done"
