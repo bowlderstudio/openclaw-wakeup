@@ -21,7 +21,7 @@ jobs:
             
             if [ $i -lt 3 ]; then
               echo "Sleeping 1.5 minutes..."
-              sleep 90
+              sleep 120
             fi
           done
         
