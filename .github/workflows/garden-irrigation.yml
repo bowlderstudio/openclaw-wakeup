@@ -10,14 +10,14 @@ jobs:
     steps:
       - name: Warm up OpenClaw
         run: |
-          for i in 1 2 3
+          for i in 1 2 3 4 5 6
           do
             echo "Wake attempt $i..."
             curl -s -o /dev/null -w "%{http_code}\n" https://openclaw-min.fly.dev/
             
             if [ $i -lt 3 ]; then
-              echo "Sleeping 2 minutes..."
-              sleep 120
+              echo "Sleeping 1 minutes..."
+              sleep 60
             fi
           done
           
