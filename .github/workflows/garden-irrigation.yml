@@ -10,15 +10,12 @@ jobs:
     steps:
       - name: Warm up OpenClaw
         run: |
-          for i in 1 2
+          for i in {1..20}
           do
             echo "Wake attempt $i..."
             curl -s -o /dev/null -w "%{http_code}\n" https://openclaw-min.fly.dev/
-            
-            if [ $i -lt 3 ]; then
-              echo "Sleeping 1 minutes..."
-              sleep 60
-            fi
+            echo "Sleeping 1 minute..."
+            sleep 60
           done
           
       - name: Run garden irrigation skill
