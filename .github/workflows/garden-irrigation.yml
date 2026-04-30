@@ -8,6 +8,12 @@ jobs:
   irrigate:
     runs-on: ubuntu-latest
     steps:
+      - name: Install Fly CLI
+        run: |
+          curl -L https://fly.io/install.sh | sh
+          echo 'export FLYCTL_INSTALL="/home/runner/.fly"' >> $GITHUB_ENV
+          echo 'export PATH="$FLYCTL_INSTALL/bin:$PATH"' >> $GITHUB_ENV
+    
       - name: Warm up OpenClaw
         run: |
           for i in {1..10}
@@ -31,3 +37,21 @@ jobs:
               "to": "8604429591",
               "model": "deepseek/deepseek-chat"
             }'
+
+      - name: Wait before shutdown
+        run: |
+          echo "Waiting 5 minutes before shutdown..."
+          sleep 300
+
+      - name: Stop Fly machine
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          export FLYCTL_INSTALL="/home/runner/.fly"
+          export PATH="$FLYCTL_INSTALL/bin:$PATH"
+
+          echo "Stopping Fly machine..."
+          MACHINE_ID=$(flyctl machines list --app openclaw-min --json | jq -r '.[0].id')
+
+          echo "Machine ID: $MACHINE_ID"
+          flyctl machines stop $MACHINE_ID --app openclaw-min
