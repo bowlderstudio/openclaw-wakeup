@@ -11,12 +11,15 @@ jobs:
       - name: Install Fly CLI
         run: |
           curl -L https://fly.io/install.sh | sh
-          echo 'export FLYCTL_INSTALL="/home/runner/.fly"' >> $GITHUB_ENV
-          echo 'export PATH="$FLYCTL_INSTALL/bin:$PATH"' >> $GITHUB_ENV
+          export FLYCTL_INSTALL="/home/runner/.fly"
+          export PATH="$FLYCTL_INSTALL/bin:$PATH"
+
+          # 验证是否成功
+          flyctl version
     
       - name: Warm up OpenClaw
         run: |
-          for i in {1..10}
+          for i in {1..5}
           do
             echo "Wake attempt $i..."
             curl -s -o /dev/null -w "%{http_code}\n" https://openclaw-min.fly.dev/
@@ -50,8 +53,14 @@ jobs:
           export FLYCTL_INSTALL="/home/runner/.fly"
           export PATH="$FLYCTL_INSTALL/bin:$PATH"
 
-          echo "Stopping Fly machine..."
-          MACHINE_ID=$(flyctl machines list --app openclaw-min --json | jq -r '.[0].id')
+          echo "Listing machines..."
+          flyctl machines list --app openclaw-min
 
-          echo "Machine ID: $MACHINE_ID"
-          flyctl machines stop $MACHINE_ID --app openclaw-min
+          echo "Stopping all machines..."
+
+          for id in $(flyctl machines list --app openclaw-min --json | jq -r '.[].id'); do
+            echo "Stopping machine $id"
+            flyctl machines stop $id --app openclaw-min
+          done
+
+          echo "Done."
