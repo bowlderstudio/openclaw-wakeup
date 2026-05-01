@@ -12,14 +12,20 @@ jobs:
       - name: Install Fly CLI
         run: |
           curl -L https://fly.io/install.sh | sh
-          echo 'export FLYCTL_INSTALL="/home/runner/.fly"' >> $GITHUB_ENV
-          echo 'export PATH="/home/runner/.fly/bin:$PATH"' >> $GITHUB_ENV
+          export FLYCTL_INSTALL="/home/runner/.fly"
+          export PATH="$FLYCTL_INSTALL/bin:$PATH"
+
+          # 验证是否成功
+          flyctl version
 
       # 2️⃣ Stop Fly machine
       - name: Stop Fly machine
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
+          export FLYCTL_INSTALL="/home/runner/.fly"
+          export PATH="$FLYCTL_INSTALL/bin:$PATH"
+
           echo "Listing machines..."
           flyctl machines list --app openclaw-min
 
